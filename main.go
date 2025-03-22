@@ -64,14 +64,20 @@ func onVerifyCommand(s *discordgo.Session, m *discordgo.MessageCreate) {
 	fmt.Printf("%20s %20s(%s) isAdmin:%t > %s\n", m.ChannelID, u.Username, u.ID, isUserAdmin, m.Content)
 
 	{
-		btn := discordgo.Button{
-			Label:    "Verify!",
+		verify := discordgo.Button{
+			Label:    "追加",
 			Style:    discordgo.PrimaryButton,
 			CustomID: "verify",
 		}
 
+		unverify := discordgo.Button{
+			Label:    "解除",
+			Style:    discordgo.SecondaryButton,
+			CustomID: "unverify",
+		}
+
 		actions := discordgo.ActionsRow{
-			Components: []discordgo.MessageComponent{btn},
+			Components: []discordgo.MessageComponent{verify, unverify},
 		}
 
 		content := "スーパーマリオワールドRTA日本Discordサーバーへようこそ！\n走者の方はボタンをクリックしてください。特定チャンネルの閲覧が可能になります。"
@@ -129,6 +135,70 @@ func onVerifyButtonClick(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	}
 }
 
+func removeRunnerRole(s *discordgo.Session, guildID string, userID string, roleID string) (r bool) {
+	m, err := s.GuildMember(guildID, userID)
+	if err != nil {
+		log.Println("Error resoponding interaction: ", err)
+		return
+	}
+
+	var isRoleMatched bool
+
+	for _, v := range m.Roles {
+		if v != roleID {
+			fmt.Println("User role not matched.")
+			isRoleMatched = false
+			continue
+		}
+
+		isRoleMatched = true
+
+		fmt.Printf("User role matched! %s", v)
+		// TODO: implement role remove code
+		err = s.GuildMemberRoleRemove(guildID, userID, roleID)
+		if err != nil {
+			fmt.Printf("Error removing role: %s", err)
+		}
+		return
+	}
+
+	return isRoleMatched
+}
+
+func onUnverifyButtonClick(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	var interactedUserID string
+	if i.MessageComponentData().CustomID == "unverify" {
+		if i.Interaction.Member != nil {
+			interactedUserID = i.Interaction.Member.User.ID
+		} else if i.Interaction.User != nil {
+			interactedUserID = i.Interaction.User.ID
+		}
+
+		r := removeRunnerRole(s, env.GuildId, interactedUserID, env.RoleId)
+
+		var content string
+
+		if r == false {
+			content = "走者ロールはすでに解除されています。"
+		} else {
+			content = "走者ロールを解除しました。"
+		}
+
+		response := &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Flags:   discordgo.MessageFlagsEphemeral,
+				Content: content,
+			},
+		}
+
+		err := s.InteractionRespond(i.Interaction, response)
+		if err != nil {
+			log.Println("Error responding interaction: ", err)
+		}
+	}
+}
+
 func main() {
 	loadEnv(&env)
 
@@ -139,6 +209,7 @@ func main() {
 
 	session.AddHandler(onVerifyCommand)
 	session.AddHandler(onVerifyButtonClick)
+	session.AddHandler(onUnverifyButtonClick)
 
 	err = session.Open()
 	if err != nil {
