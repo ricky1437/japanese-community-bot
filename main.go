@@ -19,7 +19,7 @@ type Env struct {
 var env Env
 
 func loadEnv(env *Env) {
-	err := godotenv.Load(".env")
+	err := godotenv.Load()
 
 	env.ClientId = os.Getenv("CLIENT_ID")
 	env.Token = os.Getenv("TOKEN")
