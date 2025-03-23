@@ -51,6 +51,9 @@ func sendMessageComplex(s *discordgo.Session, channelId string, data *discordgo.
 }
 
 func onVerifyCommand(s *discordgo.Session, m *discordgo.MessageCreate) {
+	if m.ChannelID != env.ChannelId {
+		return
+	}
 	u := m.Author
 	userPerms, err := s.UserChannelPermissions(u.ID, m.ChannelID)
 
@@ -145,21 +148,20 @@ func removeRunnerRole(s *discordgo.Session, guildID string, userID string, roleI
 	var isRoleMatched bool
 
 	for _, v := range m.Roles {
-		if v != roleID {
-			fmt.Println("User role not matched.")
-			isRoleMatched = false
-			continue
+		if v == roleID {
+			isRoleMatched = true
+
+			fmt.Printf("User role matched! %s", v)
+			err = s.GuildMemberRoleRemove(guildID, userID, roleID)
+			if err != nil {
+				fmt.Printf("Error removing role: %s", err)
+			}
+			return isRoleMatched
 		}
 
-		isRoleMatched = true
-
-		fmt.Printf("User role matched! %s", v)
-		// TODO: implement role remove code
-		err = s.GuildMemberRoleRemove(guildID, userID, roleID)
-		if err != nil {
-			fmt.Printf("Error removing role: %s", err)
-		}
-		return
+		fmt.Println("User role not matched.")
+		isRoleMatched = false
+		continue
 	}
 
 	return isRoleMatched
@@ -180,7 +182,7 @@ func onUnverifyButtonClick(s *discordgo.Session, i *discordgo.InteractionCreate)
 
 		if r == false {
 			content = "走者ロールはすでに解除されています。"
-		} else {
+		} else if r == true {
 			content = "走者ロールを解除しました。"
 		}
 
