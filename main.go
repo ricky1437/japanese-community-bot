@@ -8,50 +8,50 @@ import (
 	"os"
 )
 
-type Env struct {
-	ClientId  string
-	Token     string
-	GuildId   string
-	ChannelId string
-	RoleId    string
-}
+var BotToken string
+var session *discordgo.Session
 
-var env Env
-
-func loadEnv(env *Env) {
-	err := godotenv.Load()
-
-	env.ClientId = os.Getenv("CLIENT_ID")
-	env.Token = os.Getenv("TOKEN")
-	env.GuildId = os.Getenv("GUILD_ID")
-	env.ChannelId = os.Getenv("CHANNEL_ID")
-	env.RoleId = os.Getenv("ROLE_ID")
-
-	if err != nil {
-		fmt.Printf("Could not load .env: %v", err)
+func init() {
+	if os.Getenv("GO_ENV") == "dev" {
+		err := godotenv.Load()
+		if err != nil {
+			log.Fatalf("Failed to load environment variables")
+		}
 	}
 
-	fmt.Println("Sucessfully .env loaded.")
+	BotToken = os.Getenv("BOT_TOKEN")
+
+	var err error
+	session, err = discordgo.New("Bot " + BotToken)
+	if err != nil {
+		log.Fatalf("Invalid bot token: %v", err)
+	}
+
+	log.Println("Bot is now running.")
+
+	session.AddHandler(onVerifyCommand)
+	session.AddHandler(onVerifyButtonClick)
+	session.AddHandler(onUnverifyButtonClick)
 }
 
 func sendMessage(s *discordgo.Session, channelId string, msg string) {
 	_, err := s.ChannelMessageSend(channelId, msg)
 	log.Println(">>>" + msg)
 	if err != nil {
-		log.Println("Error sending message: ", err)
+		log.Fatalf("Error sending message: %v", err)
 	}
 }
 
 func sendMessageComplex(s *discordgo.Session, channelId string, data *discordgo.MessageSend) {
 	_, err := s.ChannelMessageSendComplex(channelId, data)
 	if err != nil {
-		log.Println("Error sending verification message: ", err)
+		log.Fatalf("Error sending verification message: %v", err)
 		return
 	}
 }
 
 func onVerifyCommand(s *discordgo.Session, m *discordgo.MessageCreate) {
-	if m.ChannelID != env.ChannelId {
+	if m.ChannelID != os.Getenv("ROLE_CHANNEL_ID") {
 		return
 	}
 	u := m.Author
@@ -60,7 +60,7 @@ func onVerifyCommand(s *discordgo.Session, m *discordgo.MessageCreate) {
 	var isUserAdmin bool = userPerms&discordgo.PermissionAdministrator != 0
 
 	if err != nil {
-		fmt.Printf("Failed to get UserChannelPermission data: %v", err)
+		log.Fatalf("Failed to get UserChannelPermission data: %v", err)
 		return
 	}
 
@@ -95,7 +95,7 @@ func onVerifyCommand(s *discordgo.Session, m *discordgo.MessageCreate) {
 		}
 
 		if !isUserAdmin {
-			fmt.Printf("[SECURITY WARN]Execution Attempt from unpriviledged user!\n Username: %s ID:%20s", u.Username, u.ID)
+			log.Printf("[SECURITY WARN]Execution Attempt from unpriviledged user!\n Username: %s ID:%s", u.Username, u.ID)
 			sendMessage(s, m.ChannelID, u.Mention()+"このコマンドは管理者のみ使用できます。")
 			return
 		}
@@ -107,7 +107,7 @@ func onVerifyCommand(s *discordgo.Session, m *discordgo.MessageCreate) {
 func giveRunnerRole(s *discordgo.Session, guildID string, userID string, roleID string) {
 	err := s.GuildMemberRoleAdd(guildID, userID, roleID)
 	if err != nil {
-		log.Println("Error giving a role to an user.")
+		log.Fatalf("Error giving a role to an user: %v", err)
 	}
 }
 
@@ -129,11 +129,11 @@ func onVerifyButtonClick(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			},
 		}
 
-		giveRunnerRole(s, env.GuildId, interactedUserID, env.RoleId)
+		giveRunnerRole(s, os.Getenv("GUILD_ID"), interactedUserID, os.Getenv("RUNNER_ROLE_ID"))
 
 		err := s.InteractionRespond(i.Interaction, response)
 		if err != nil {
-			log.Println("Error responding interaction: ", err)
+			log.Fatalf("Error responding interaction: %v", err)
 		}
 	}
 }
@@ -141,7 +141,7 @@ func onVerifyButtonClick(s *discordgo.Session, i *discordgo.InteractionCreate) {
 func removeRunnerRole(s *discordgo.Session, guildID string, userID string, roleID string) (r bool) {
 	m, err := s.GuildMember(guildID, userID)
 	if err != nil {
-		log.Println("Error resoponding interaction: ", err)
+		log.Fatalf("Error resoponding interaction: %v", err)
 		return
 	}
 
@@ -151,15 +151,15 @@ func removeRunnerRole(s *discordgo.Session, guildID string, userID string, roleI
 		if v == roleID {
 			isRoleMatched = true
 
-			fmt.Printf("User role matched! %s", v)
+			log.Printf("User role matched! %v", v)
 			err = s.GuildMemberRoleRemove(guildID, userID, roleID)
 			if err != nil {
-				fmt.Printf("Error removing role: %s", err)
+				log.Fatalf("Error removing role: %v", err)
 			}
 			return isRoleMatched
 		}
 
-		fmt.Println("User role not matched.")
+		log.Println("User role not matched.")
 		isRoleMatched = false
 		continue
 	}
@@ -176,7 +176,7 @@ func onUnverifyButtonClick(s *discordgo.Session, i *discordgo.InteractionCreate)
 			interactedUserID = i.Interaction.User.ID
 		}
 
-		r := removeRunnerRole(s, env.GuildId, interactedUserID, env.RoleId)
+		r := removeRunnerRole(s, os.Getenv("GUILD_ID"), interactedUserID, os.Getenv("RUNNER_ROLE_ID"))
 
 		var content string
 
@@ -196,28 +196,16 @@ func onUnverifyButtonClick(s *discordgo.Session, i *discordgo.InteractionCreate)
 
 		err := s.InteractionRespond(i.Interaction, response)
 		if err != nil {
-			log.Println("Error responding interaction: ", err)
+			log.Fatalf("Error responding interaction: %v", err)
 		}
 	}
 }
 
 func main() {
-	loadEnv(&env)
-
-	session, err := discordgo.New("Bot " + env.Token)
+	err := session.Open()
 	if err != nil {
-		fmt.Println("Failed to log in,", err)
+		log.Fatalf("Error opening connection: %v", err)
 	}
-
-	session.AddHandler(onVerifyCommand)
-	session.AddHandler(onVerifyButtonClick)
-	session.AddHandler(onUnverifyButtonClick)
-
-	err = session.Open()
-	if err != nil {
-		fmt.Println("Error opening connection,", err)
-	}
-
-	fmt.Println("Bot is now running. Press CTRL+C to exit.")
+	log.Println("Connection established.")
 	select {}
 }
