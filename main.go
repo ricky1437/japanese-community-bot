@@ -27,7 +27,7 @@ func init() {
 		log.Fatalf("Invalid bot token: %v", err)
 	}
 
-	log.Println("Bot is now running.")
+	fmt.Println("Bot is now running.")
 
 	session.AddHandler(onVerifyCommand)
 	session.AddHandler(onVerifyButtonClick)
@@ -151,7 +151,7 @@ func removeRunnerRole(s *discordgo.Session, guildID string, userID string, roleI
 		if v == roleID {
 			isRoleMatched = true
 
-			log.Printf("User role matched! %v", v)
+			fmt.Printf("User role matched! %v", v)
 			err = s.GuildMemberRoleRemove(guildID, userID, roleID)
 			if err != nil {
 				log.Fatalf("Error removing role: %v", err)
@@ -159,7 +159,7 @@ func removeRunnerRole(s *discordgo.Session, guildID string, userID string, roleI
 			return isRoleMatched
 		}
 
-		log.Println("User role not matched.")
+		fmt.Println("User role not matched.")
 		isRoleMatched = false
 		continue
 	}
@@ -206,6 +206,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error opening connection: %v", err)
 	}
-	log.Println("Connection established.")
+	fmt.Println("Connection established.")
 	select {}
 }
